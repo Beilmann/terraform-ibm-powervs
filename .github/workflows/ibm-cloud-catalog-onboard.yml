@@ -1,0 +1,102 @@
+# This is a workflow to onboard offerings to the IBM Cloud catalog.
+
+name: ibm-cloud-catalog-onboard
+
+# Controls when the workflow will run
+on:
+  # Triggers the workflow on the publish of a release. Its assumed that the release has an associated tag.  The tag is 
+  # expected to be of the form "vXX.XX.XX" but this could be adapted to any convention.
+
+  release:
+    types:
+      - published  
+       
+  workflow_dispatch: 
+jobs:
+  # This workflow contains a single job called "onbaord-release"
+  onboard-release:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      # Extracts the offering version number from the tag which is assumed to be of the format "vXX.XX.XX"
+      - name: Determine version 
+        run: echo "VERSION=$(echo ${{ github.event.release.tag_name }} | cut -c2-)" >> $GITHUB_ENV
+
+      # For debugging - echo all the environment variables in sorted order
+      - name: Dump environment
+        run: env | sort
+
+      # For debugging - echo the git context and all properties
+      - name: Dump GitHub context
+        env:
+          GITHUB_CONTEXT: ${{ toJson(github) }}
+        run: echo "$GITHUB_CONTEXT"   
+
+      # Create the tar.gz file that will be uploaded to the gihub release and catalog offering
+      - name: Create release asset for powervs-infrastructure
+        run: |
+          echo 'creating asset for powervs infrastructure - ${{ github.ref_name }}-powervs-infrastructure-catalog.tar.gz'
+          touch ${{ github.ref_name }}-powervs-infrastructure-catalog.tar.gz
+          tar --exclude="${{ github.ref_name }}-powervs-infrastructure-catalog.tar.gz" -czvf ./${{ github.ref_name }}-powervs-infrastructure-catalog.tar.gz .
+          echo 'done creating asset for powervs-infrastructure'          
+
+      # Upload a release asset to the repo on the newly created release
+      - name: Upload Release Asset
+        id: powervs-infrastructure-asset 
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
+          asset_path: ./${{ github.ref_name }}-powervs-infrastructure-catalog.tar.gz
+          asset_name: ${{ github.ref_name }}-powervs-infrastructure-catalog.tar.gz
+          asset_content_type: application/octet-stream
+
+      # Import new offering versions to the IBM catalog.  Need to first install the CLI, catalog management plugin then use the CLI to 
+      # import the version to the offering and validate it.
+      - name: Upload to cloud catalog
+        id: setup-cli-and-upload
+        env: 
+          IBMCLOUD_API_KEY: ${{ secrets.IBMCLOUD_API_KEY }}
+        run: |
+          curl -sL https://ibm.biz/idt-installer | bash
+          ibmcloud plugin install catalogs-management
+          ibmcloud plugin install schematics
+          ibmcloud plugin list
+          ibmcloud login --apikey "$IBMCLOUD_API_KEY" --no-region
+
+          VERSION=${{ env.VERSION }}
+
+          catalogName="Terraform Power Solution"
+
+          echo "--------------------------------------------------------------------"
+          echo "onboard version, validate, publish"
+          offeringName="PowerVS Infrastructure (internal test)"
+
+          # format offering validation values into json format
+          jq -n --arg IBMCLOUD_API_KEY "$IBMCLOUD_API_KEY" '{ "ibmcloud_api_key": $IBMCLOUD_API_KEY, "pvs_zone": "sao01","prefix": "try","cloud_connection_reuse" : "true", "cloud_connection_name" : "sao-1","pvs_resource_group_name" : "Learning Resources","pvs_public_key" : "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDZdQYXrRuCOES9/7DhBZ5BHG5/y6/x8algnv8vbg07pM7r+DtIQ6ZekVFuDzsq+76TurwQRW1hypRqjtPzUYeJMRPJUILHWl6CwXo6ihxUzmBBmdxp1bIrJ8Zpgp9e7W+F2iQrLq5VsUD61+lJYj/zIL939ycGn/+yLoJ721vcj5fguhnBoiuk493us2ltJ+BCkU0LArLDPg1+YIRnfqic8FTBrSq+3qT4JOAMbWUlxbCAn1UzQ7Je8gJYEPwle+ONKdhcgNBxHQUaLQQAmCxjzqZ/nU54Inow+gpeNUktYTYUQvZ5Zo8oMhxPsLff+gOt8Ibv09WgJaUFGy7YS2DaMcr2HvOKwOylYviokmS8K/mJ85hrW4Ifl+CZvNLvIIZct8G9TNNyYL7sZpb39uGpewGz1psEAynA/Kka2O9rvoJ0PvRSIwgHLQ2kM/83N+vLq18gqBfvxyRETPT+DV5Rk+v5Q1TvfiNxJ4+V9lTp/lGwHVEExk3BrFHDaCD9pos= AzureAD+SurajSanathKumarBhar@LAPTOP-QNUBGG8L"}' > valid-values.json  
+
+          # import the version into the catalog and run schematics validation 
+          RESOURCE_GROUP="Default"
+          chmod +x ./.github/scripts/onboard_validate_publish.sh
+          chmod 777 ./.github/scripts/onboard_validate_publish.sh
+          ./.github/scripts/onboard_validate_publish.sh "$catalogName" "$offeringName" ${{ steps.powervs-infrastructure-asset.outputs.browser_download_url }} ${{ env.VERSION }} "$RESOURCE_GROUP"
+
+          echo "--------------------------------------------------------------------"
+          echo "   Begin resource cleanup "
+          echo "--------------------------------------------------------------------"
+
+          echo "--------------------------------------------------------------------"
+          echo "destroy resources"
+          offeringName="PowerVS Infrastructure (internal test)"
+          # get the schematics workspace id that was used for the validation of this version
+          #workspaceID=$(ibmcloud catalog offering get -c "$catalogName" -o "$offeringName" --output json | jq -r --arg version "${{ env.VERSION }}" '.kinds[] | select(.format_kind=="terraform").versions[] | select(.version==$version).validation.target.workspace_id')
+          #./.github/scripts/cleanup.sh "$workspaceID"
+
