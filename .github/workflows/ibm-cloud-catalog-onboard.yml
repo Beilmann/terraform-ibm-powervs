@@ -95,7 +95,7 @@ jobs:
 
           echo "--------------------------------------------------------------------"
           echo "destroy resources"
-          offeringName="PowerVS Infrastructure (internal test)"
+          offeringName="PowerVS Infrastructure (Arnold test)"
           # get the schematics workspace id that was used for the validation of this version
           #workspaceID=$(ibmcloud catalog offering get -c "$catalogName" -o "$offeringName" --output json | jq -r --arg version "${{ env.VERSION }}" '.kinds[] | select(.format_kind=="terraform").versions[] | select(.version==$version).validation.target.workspace_id')
           #./.github/scripts/cleanup.sh "$workspaceID"
