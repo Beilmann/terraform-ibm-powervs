@@ -60,11 +60,6 @@ variable "cloud_connection_reuse" {
   default     = false
 }
 
-variable "cloud_connection_name" {
-  description = "Name of the Cloud connection which will be created/ Existing name of cloud connection to attach subnets"
-  type        = string
-}
-
 variable "cloud_connection_count" {
   description = "Required number of Cloud connections. Ignore when Reusing. Maximum is 2 per location"
   type        = string
