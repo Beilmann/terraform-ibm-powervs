@@ -49,45 +49,40 @@ data "ibm_pi_network" "pvs_subnets_ds" {
 }
 
 #####################################################
-# Create Cloud Connection 1
-# Copyright 2022 IBM
-#####################################################
-
-
-resource "ibm_pi_cloud_connection" "cloud_connection" {
-  count                               = var.cloud_connection_reuse ? 0 : 1
-  pi_cloud_instance_id                = data.ibm_resource_instance.pvs_service_ds.guid
-  pi_cloud_connection_name            = var.cloud_connection_name
-  pi_cloud_connection_speed           = var.cloud_connection_speed
-  pi_cloud_connection_global_routing  = var.cloud_connection_gr
-  pi_cloud_connection_metered         = var.cloud_connection_metered
-  #pi_cloud_connection_networks        = toset(data.ibm_pi_network.pvs_subnets_ds.*.id)
-  pi_cloud_connection_vpc_enabled     = length(var.vpc_crns) >= 1 ? true : null 
-  pi_cloud_connection_vpc_crns        = length(var.vpc_crns) >= 1 ? toset(var.vpc_crns) : null
-}
-
-#####################################################
-# Create Cloud Connection 2
-# Copyright 2022 IBM
-#####################################################
-
-resource "ibm_pi_cloud_connection" "cloud_connection_backup" {
-  depends_on                          = [ibm_pi_cloud_connection.cloud_connection]
-  count                               = !var.cloud_connection_reuse && var.cloud_connection_count  > 1 ? 1 : 0
-  pi_cloud_instance_id                = data.ibm_resource_instance.pvs_service_ds.guid
-  pi_cloud_connection_name            = "${var.cloud_connection_name}-bkp"
-  pi_cloud_connection_speed           = var.cloud_connection_speed
-  pi_cloud_connection_global_routing  = var.cloud_connection_gr
-  pi_cloud_connection_metered         = var.cloud_connection_metered
-  #pi_cloud_connection_networks        = toset(data.ibm_pi_network.pvs_subnets_ds.*.id)
-  pi_cloud_connection_vpc_enabled     = length(var.vpc_crns) >= 1 ? true : null 
-  pi_cloud_connection_vpc_crns        = length(var.vpc_crns) >= 1 ? toset(var.vpc_crns) : null
-} 
-
-#####################################################
 # Reuse Cloud Connection to attach PVS subnets
 # Copyright 2022 IBM
 #####################################################
+
+data "ibm_pi_cloud_connections" "orig_cloud_connection_ds" {
+  #count                     = var.cloud_connection_reuse ? 1 : 0
+  pi_cloud_instance_id      = data.ibm_resource_instance.pvs_service_ds.guid
+}
+
+resource "ibm_pi_cloud_connection" "cloud_connection" {
+  count                               = length(data.ibm_pi_cloud_connection.orig_cloud_connection_ds) < 1 ? 1 : 0 
+  pi_cloud_instance_id                = data.ibm_resource_instance.pvs_service_ds.guid
+  pi_cloud_connection_name            = "${var.pvs_zone}-conn-1"
+  pi_cloud_connection_speed           = var.cloud_connection_speed
+  pi_cloud_connection_global_routing  = var.cloud_connection_gr
+  pi_cloud_connection_metered         = var.cloud_connection_metered
+  #pi_cloud_connection_networks        = toset(data.ibm_pi_network.pvs_subnets_ds.*.id)
+  pi_cloud_connection_vpc_enabled     = length(var.vpc_crns) >= 1 ? true : null
+  pi_cloud_connection_vpc_crns        = length(var.vpc_crns) >= 1 ? toset(var.vpc_crns) : null
+}
+
+resource "ibm_pi_cloud_connection" "cloud_connection_backup" {
+  depends_on                          = [ibm_pi_cloud_connection.cloud_connection]
+  count                               = length(data.ibm_pi_cloud_connection.orig_cloud_connection_ds) < 2 ? 1 : 0
+  pi_cloud_instance_id                = data.ibm_resource_instance.pvs_service_ds.guid
+  pi_cloud_connection_name            = "${var.pvs_zone}-conn-2"
+  pi_cloud_connection_speed           = var.cloud_connection_speed
+  pi_cloud_connection_global_routing  = var.cloud_connection_gr
+  pi_cloud_connection_metered         = var.cloud_connection_metered
+  #pi_cloud_connection_networks        = toset(data.ibm_pi_network.pvs_subnets_ds.*.id)
+  pi_cloud_connection_vpc_enabled     = length(var.vpc_crns) >= 1 ? true : null
+  pi_cloud_connection_vpc_crns        = length(var.vpc_crns) >= 1 ? toset(var.vpc_crns) : null
+}
+
 
 data "ibm_pi_cloud_connections" "cloud_connection_ds" {
   #count                     = var.cloud_connection_reuse ? 1 : 0
