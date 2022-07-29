@@ -23,12 +23,6 @@ variable "pvs_public_key" {
   type        = string
 }
 
-variable "pvs_image_names" {
-  description = "List of Images to be imported into cloud account from catalog images"
-  type        = list(string)
-  default     = ["Linux-SUSE-SAP-15-3","Linux-RHEL-SAP-8-4"]
-}
-
 variable "pvs_management_network" {
   description = "PowerVS Management Subnet name and cidr which will be created."
   type        = map

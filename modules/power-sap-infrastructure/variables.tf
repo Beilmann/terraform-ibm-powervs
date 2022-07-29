@@ -39,6 +39,11 @@ variable "pvs_backup_network" {
   type        = map
 }
 
+variable "transit_gw_name" {  
+  description = "Name of the existing transit gateway. May be empty if cloud connections will be reused."
+  type        = string
+}
+
 variable "cloud_connection_reuse" {
   description = "Use existing Cloud connection to attach PVS subnets"
   type        = bool

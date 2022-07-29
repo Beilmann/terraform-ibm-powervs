@@ -39,27 +39,6 @@ resource "ibm_pi_key" "ssh_key" {
 }
 
 #####################################################
-# Import Catalog Images
-# Copyright 2022 IBM
-#####################################################
-
-data "ibm_pi_catalog_images" "catalog_images_ds" {
-  sap                  = true
-  pi_cloud_instance_id = ibm_resource_instance.pvs_service.guid
-}
-
-locals {
-  catalog_images_to_import = flatten([for stock_image in data.ibm_pi_catalog_images.catalog_images_ds.images : [for image_name in var.pvs_image_names : stock_image if stock_image.name == image_name]])
-}
-
-resource "ibm_pi_image" "import_images" {
-  count                = length(var.pvs_image_names)
-  pi_cloud_instance_id = ibm_resource_instance.pvs_service.guid
-  pi_image_id          = local.catalog_images_to_import[count.index].image_id
-  pi_image_name        = var.pvs_image_names[count.index]
-}
-
-#####################################################
 # Create Public and Private Subnets
 # Copyright 2022 IBM
 #####################################################
